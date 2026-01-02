@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Income App - Glass OS</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Monetag SDK -->
+    <script src='https://libtl.com/sdk.js' data-zone='9055411' data-sdk='show_9055411'></script>
+
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+
+    <style>
+        :root {
+            --glass-bg: rgba(255, 255, 255, 0.10);
+            --glass-border: rgba(255, 255, 255, 0.15);
+            --text-color: #ffffff;
+            --bg-gradient: linear-gradient(135deg, #1a1c2e 0%, #3a1c71 50%, #d76d77 100%);
+        }
+        body {
+            background: var(--bg-gradient);
+            color: var(--text-color);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            min-height: 100vh;
+            overflow-x: hidden;
+            -webkit-tap-highlight-color: transparent;
+            padding-bottom: 80px;
+        }
+        .glass {
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+        }
+        .glass-panel {
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: 1.5rem;
+            padding: 1.25rem;
+            margin-bottom: 1rem;
+            transition: transform 0.2s;
+        }
+        .glass-panel:active { transform: scale(0.99); }
+        
+        .section { display: none; animation: fadeIn 0.4s ease; }
+        .section.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        
+        .nav-item.active { color: #fbbf24; transform: translateY(-5px); }
+        
+        .pay-card {
+            background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 16px; padding: 12px; display: flex; align-items: center; gap: 10px; cursor: pointer; position: relative;
+        }
+        .pay-card.selected { background: rgba(255,255,255,0.2); border-color: #fbbf24; }
+        .pay-card .check { display: none; position: absolute; top: 5px; right: 5px; color: #fbbf24; font-size: 12px; }
+        .pay-card.selected .check { display: block; }
+        
+        .amount-input { background: transparent; font-size: 2.5rem; font-weight: 800; text-align: center; width: 100%; outline: none; color: white; border-bottom: 2px solid rgba(255,255,255,0.2); }
+        .chip { background: rgba(255,255,255,0.1); border-radius: 20px; padding: 8px 16px; font-size: 12px; cursor: pointer; }
+        .skeleton { background: linear-gradient(90deg, rgba(255,255,255,0.1) 25%, rgba(255,255,255,0.2) 50%, rgba(255,255,255,0.1) 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; color: transparent !important; border-radius: 5px; }
+        @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+    </style>
+</head>
+<body>
+
+    <!-- HEADER -->
+    <header class="fixed top-0 w-full z-50 px-5 py-4 glass flex justify-between items-center">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-full bg-gradient-to-r from-yellow-400 to-orange-500 flex items-center justify-center font-bold text-white shadow-lg">
+                <i class="fa-solid fa-coins"></i>
+            </div>
+            <div><h1 class="text-sm font-bold">Income App</h1><p class="text-xs opacity-80" id="header-balance">$0.00</p></div>
+        </div>
+        <button onclick="toggleAI()" class="w-10 h-10 rounded-full glass flex items-center justify-center"><i class="fa-solid fa-robot text-blue-300"></i></button>
+    </header>
+
+    <!-- CONTENT -->
+    <main class="container mx-auto px-4 mt-24 z-10 relative">
+        <!-- DASHBOARD -->
+        <section id="dashboard" class="section active">
+            <div class="glass-panel text-center py-8 relative overflow-hidden">
+                <div class="absolute top-0 right-0 w-32 h-32 bg-yellow-400 rounded-full blur-3xl opacity-20 -mr-10 -mt-10"></div>
+                <p class="text-sm opacity-70">Total Balance</p>
+                <h2 class="text-5xl font-bold my-2 skeleton-text" id="main-balance">$0.00</h2>
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+                <div class="glass-panel flex flex-col items-center"><i class="fa-solid fa-eye text-2xl mb-2 text-blue-400"></i><span class="text-lg font-bold" id="ads-watched">0</span><span class="text-xs opacity-60">Ads</span></div>
+                <div class="glass-panel flex flex-col items-center"><i class="fa-solid fa-users text-2xl mb-2 text-purple-400"></i><span class="text-lg font-bold" id="total-referrals">0</span><span class="text-xs opacity-60">Refs</span></div>
+            </div>
+            <h3 class="font-bold mb-3 ml-2">Tasks</h3>
+            <div onclick="openDirectLink(1)" class="glass-panel flex justify-between items-center cursor-pointer hover:bg-white/10 border-l-4 border-red-500">
+                <div class="flex items-center gap-4"><div class="w-12 h-12 rounded-xl bg-red-500/20 flex items-center justify-center text-red-400"><i class="fa-solid fa-fire"></i></div><div><h4 class="font-bold">High CPM</h4><p class="text-xs opacity-60">Visit Link</p></div></div>
+                <div class="bg-red-500 text-white text-xs font-bold px-3 py-1 rounded-full">5</div>
+            </div>
+        </section>
+
+        <!-- EARN -->
+        <section id="earn" class="section">
+            <h2 class="text-2xl font-bold mb-4">Task Wall</h2>
+            <div onclick="showMonetagAd()" class="glass-panel flex items-center gap-4 cursor-pointer hover:bg-white/10 border-l-4 border-yellow-400">
+                <div class="w-12 h-12 rounded-full bg-yellow-400/20 flex items-center justify-center text-yellow-400"><i class="fa-solid fa-play"></i></div>
+                <div class="flex-1"><h4 class="font-bold">Watch Video</h4><p class="text-xs opacity-70">Monetag</p></div>
+                <div class="bg-yellow-400 text-black text-xs font-bold px-3 py-1 rounded-full">10</div>
+            </div>
+            <div onclick="openDirectLink(2)" class="glass-panel flex items-center gap-4 cursor-pointer hover:bg-white/10 border-l-4 border-blue-400">
+                <div class="w-12 h-12 rounded-full bg-blue-400/20 flex items-center justify-center text-blue-400"><i class="fa-regular fa-compass"></i></div>
+                <div class="flex-1"><h4 class="font-bold">Explore</h4><p class="text-xs opacity-70">Read</p></div>
+                <div class="bg-blue-400 text-white text-xs font-bold px-3 py-1 rounded-full">5</div>
+            </div>
+        </section>
+
+        <!-- WALLET -->
+        <section id="wallet" class="section">
+            <h2 class="text-2xl font-bold mb-4">Withdraw</h2>
+            <div class="glass-panel">
+                <div class="mb-6 text-center">
+                    <label class="text-xs opacity-60">AMOUNT</label>
+                    <div class="relative w-3/4 mx-auto"><span class="absolute left-0 top-1/2 -translate-y-1/2 text-3xl font-bold opacity-50">$</span><input type="number" id="withdraw-amount" placeholder="0.00" class="amount-input pl-8"></div>
+                    <div class="flex justify-center gap-3 mt-4"><div class="chip" onclick="setAmount(5)">$5</div><div class="chip" onclick="setAmount(10)">$10</div><div class="chip" onclick="setAmount(20)">$20</div></div>
+                </div>
+                <label class="text-xs opacity-60">METHOD</label>
+                <div class="grid grid-cols-2 gap-3 mb-6">
+                    <div class="pay-card selected" onclick="selectMethod('bkash', this)"><i class="fa-solid fa-check check"></i><div class="w-8 h-8 rounded-full bg-pink-500/20 flex items-center justify-center text-pink-500"><i class="fa-solid fa-b"></i></div><span class="text-xs font-bold">Bkash</span></div>
+                    <div class="pay-card" onclick="selectMethod('nagad', this)"><i class="fa-solid fa-check check"></i><div class="w-8 h-8 rounded-full bg-orange-500/20 flex items-center justify-center text-orange-500"><i class="fa-solid fa-n"></i></div><span class="text-xs font-bold">Nagad</span></div>
+                    <div class="pay-card" onclick="selectMethod('recharge', this)"><i class="fa-solid fa-check check"></i><div class="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-500"><i class="fa-solid fa-mobile"></i></div><span class="text-xs font-bold">TopUp</span></div>
+                    <div class="pay-card" onclick="selectMethod('usdt', this)"><i class="fa-solid fa-check check"></i><div class="w-8 h-8 rounded-full bg-green-500/20 flex items-center justify-center text-green-500"><i class="fa-solid fa-dollar-sign"></i></div><span class="text-xs font-bold">USDT</span></div>
+                </div>
+                <label class="text-xs opacity-60" id="address-label">ACCOUNT NO</label>
+                <input type="text" id="withdraw-address" placeholder="017xxxxxxxx" class="w-full bg-black/30 border border-white/10 rounded-xl py-3 px-4 outline-none text-white mb-4">
+                <button id="withdraw-btn" onclick="submitWithdraw()" class="w-full py-4 rounded-xl bg-gradient-to-r from-yellow-400 to-orange-500 text-black font-bold shadow-lg">Withdraw</button>
+            </div>
+            <div id="withdraw-history" class="text-center text-xs opacity-60">No recent transactions</div>
+        </section>
+
+        <!-- LEADERBOARD & REFER -->
+        <section id="leaderboard" class="section">
+            <div class="glass-panel bg-gradient-to-r from-purple-600/40 to-blue-600/40 border-none mb-4">
+                <h3 class="font-bold text-lg">Invite Friends</h3>
+                <p class="text-xs opacity-80 mb-3">Earn 10% commission forever!</p>
+                <div class="flex gap-2">
+                    <input type="text" id="ref-code-display" value="Loading..." readonly class="w-full bg-black/20 rounded-lg px-3 py-2 text-xs text-white font-mono">
+                    <button onclick="copyRef()" class="bg-white text-blue-600 px-4 rounded-lg font-bold text-sm">Copy</button>
+                </div>
+            </div>
+            
+            <h3 class="font-bold mb-3 mt-6 text-xl">🏆 Top Leaders</h3>
+            <div id="leaderboard-list" class="space-y-2 pb-20">
+                <div class="text-center text-xs opacity-50 py-4">Loading Leaders...</div>
+            </div>
+        </section>
+
+        <!-- SETTINGS -->
+        <section id="settings" class="section">
+            <h2 class="text-2xl font-bold mb-4">Settings</h2>
+            <div class="glass-panel mb-4">
+                <div class="flex items-center gap-4 mb-4">
+                    <div class="w-14 h-14 rounded-full bg-gradient-to-tr from-pink-500 to-purple-500 flex items-center justify-center text-2xl font-bold">U</div>
+                    <div><h3 class="font-bold">Guest User</h3><p class="text-xs opacity-60">Active now</p></div>
+                </div>
+                <div class="bg-black/20 p-3 rounded-xl flex justify-between items-center"><span class="text-xs opacity-70">UID:</span><div class="flex gap-2"><span id="settings-uid" class="font-mono text-yellow-400 text-xs">...</span><button onclick="copyUID()" class="text-blue-300"><i class="fa-regular fa-copy"></i></button></div></div>
+            </div>
+            
+            <div onclick="window.open('https://t.me/YOUR_CHANNEL', '_blank')" class="glass-panel flex items-center gap-3 cursor-pointer hover:bg-white/10 mb-4">
+                <div class="w-10 h-10 rounded-full bg-blue-400/20 flex items-center justify-center text-blue-300"><i class="fa-brands fa-telegram"></i></div>
+                <div><h4 class="font-bold text-sm">Support</h4><p class="text-[10px] opacity-60">Telegram</p></div>
+            </div>
+        </section>
+    </main>
+
+    <!-- SUCCESS MODAL -->
+    <div id="success-modal" class="fixed inset-0 z-[80] hidden flex items-center justify-center px-4">
+        <div class="absolute inset-0 bg-black/80 backdrop-blur-md"></div>
+        <div class="glass w-full max-w-sm rounded-3xl p-6 bg-gray-900 border border-white/10 text-center">
+            <div class="w-16 h-16 rounded-full bg-green-500/20 flex items-center justify-center text-green-400 mx-auto mb-4"><i class="fa-solid fa-check text-2xl"></i></div>
+            <h2 class="text-xl font-bold text-white">Success!</h2>
+            <p class="text-gray-400 text-sm mb-4">Withdrawal request submitted.</p>
+            <div class="bg-white/5 rounded-xl p-3 mb-4"><div class="flex justify-between text-sm mb-2"><span>Amount</span><span class="font-bold" id="modal-amount">$0.00</span></div><div class="flex justify-between text-sm"><span>Method</span><span class="font-bold uppercase" id="modal-method">...</span></div></div>
+            <button onclick="closeSuccessModal()" class="w-full py-3 rounded-xl bg-white text-black font-bold">Close</button>
+        </div>
+    </div>
+
+    <!-- AI Modal -->
+    <div id="ai-modal" class="fixed inset-0 z-[60] hidden flex items-center justify-center px-4">
+        <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" onclick="toggleAI()"></div>
+        <div class="glass w-full max-w-sm h-[60vh] rounded-3xl flex flex-col bg-gray-900/80">
+            <div class="p-4 border-b border-white/10 flex justify-between"><h3 class="font-bold text-white">AI Support</h3><button onclick="toggleAI()" class="text-white"><i class="fa-solid fa-xmark"></i></button></div>
+            <div id="chat-box" class="flex-1 overflow-y-auto p-4 space-y-3"><div class="bg-white/10 p-3 rounded-xl w-3/4 text-sm">How can I help you?</div></div>
+            <div class="p-3 border-t border-white/10 flex gap-2"><input type="text" id="ai-input" class="flex-1 bg-black/20 rounded-xl px-3 text-sm text-white"><button onclick="sendAIMessage()" class="w-10 h-10 bg-blue-500 rounded-xl flex items-center justify-center text-white"><i class="fa-solid fa-paper-plane"></i></button></div>
+        </div>
+    </div>
+
+    <!-- NAV -->
+    <nav class="fixed bottom-0 w-full glass z-50 pb-safe">
+        <div class="flex justify-around py-3">
+            <button onclick="nav('dashboard')" class="nav-item active flex flex-col items-center w-1/5"><i class="fa-solid fa-house"></i><span class="text-[10px]">Home</span></button>
+            <button onclick="nav('earn')" class="nav-item flex flex-col items-center w-1/5"><i class="fa-solid fa-sack-dollar"></i><span class="text-[10px]">Earn</span></button>
+            <button onclick="nav('wallet')" class="nav-item flex flex-col items-center w-1/5"><i class="fa-solid fa-wallet"></i><span class="text-[10px]">Wallet</span></button>
+            <button onclick="nav('leaderboard')" class="nav-item flex flex-col items-center w-1/5"><i class="fa-solid fa-trophy"></i><span class="text-[10px]">Top</span></button>
+            <button onclick="nav('settings')" class="nav-item flex flex-col items-center w-1/5"><i class="fa-solid fa-gear"></i><span class="text-[10px]">Settings</span></button>
+        </div>
+    </nav>
+
+    <script>
+        // --- UPDATED CONFIG WITH YOUR DOMAIN ---
+        const firebaseConfig = {
+          apiKey: "AIzaSyDIijN_DMPzQw7hKExtJN3vCwFjnwvUyIk",
+          authDomain: "income-app-33c37.firebaseapp.com",
+          databaseURL: "https://income-app-33c37-default-rtdb.firebaseio.com",
+          projectId: "income-app-33c37",
+          storageBucket: "income-app-33c37.firebasestorage.app",
+          messagingSenderId: "845325569178",
+          appId: "1:845325569178:web:a488915b5f3861349ea323"
+        };
+        const links = { 1: "https://www.effectivegatecpm.com/vrjxnpzq8s?key=cb7124f3c1f873f869204eeccaa97682", 2: "https://www.effectivegatecpm.com/qyt66jpv?key=b28fcc581b4bb9d613e731afb5ccfb5b" };
+        
+        let balance=0, currentUser=null, db=null, auth=null, currentMethod='bkash';
+
+        window.onload = function() {
+            // Load Cache
+            const c = localStorage.getItem('savedBalance');
+            if(c) {
+                balance = parseFloat(c);
+                document.getElementById('main-balance').innerText='$'+balance.toFixed(2);
+                document.getElementById('header-balance').innerText='$'+balance.toFixed(2);
+                document.getElementById('main-balance').classList.remove('skeleton-text');
+            }
+            
+            const p = new URLSearchParams(window.location.search);
+            if(p.get('ref')) localStorage.setItem('refCode', p.get('ref'));
+
+            try {
+                firebase.initializeApp(firebaseConfig);
+                db = firebase.firestore();
+                auth = firebase.auth();
+
+                auth.onAuthStateChanged((user) => {
+                    if(user) {
+                        handleUser(user);
+                    } else {
+                        // NO LOGIN SCREEN - Auto Anonymous
+                        auth.signInAnonymously().catch(e => console.error("Auth Fail", e));
+                    }
+                });
+                
+                loadLeaderboard();
+                
+            } catch(e){ console.error(e); }
+        };
+
+        function handleUser(user) {
+            currentUser = user;
+            
+            // --- FIX: UPDATE UI IMMEDIATELY ---
+            document.getElementById('settings-uid').innerText = user.uid;
+            
+            // Generate link with CURRENT DOMAIN
+            const domain = window.location.hostname;
+            const protocol = window.location.protocol;
+            // Example: https://income-app-33c37.web.app/?ref=...
+            document.getElementById('ref-code-display').value = `${protocol}//${domain}/?ref=${user.uid}`;
+            
+            const ref = db.collection('users').doc(user.uid);
+            ref.get().then(doc => {
+                if(!doc.exists) {
+                    const r = localStorage.getItem('refCode');
+                    let d = {
+                        name: "Guest", email: "No Email", photo: "",
+                        balance: 0.00, adsWatched: 0, joinedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    };
+                    if(r && r!==user.uid) d.referredBy = r;
+                    ref.set(d).then(() => { localStorage.removeItem('refCode'); listenData(user.uid); });
+                } else listenData(user.uid);
+            });
+        }
+
+        function listenData(uid) {
+            db.collection('users').doc(uid).onSnapshot(doc => {
+                if(doc.exists) {
+                    const d = doc.data();
+                    balance = d.balance || 0;
+                    document.getElementById('main-balance').innerText='$'+balance.toFixed(2);
+                    document.getElementById('header-balance').innerText='$'+balance.toFixed(2);
+                    document.getElementById('ads-watched').innerText=d.adsWatched||0;
+                    document.getElementById('total-referrals').innerText=d.referralCount||0;
+                    document.getElementById('main-balance').classList.remove('skeleton');
+                    localStorage.setItem('savedBalance', balance);
+                }
+            });
+        }
+
+        function loadLeaderboard() {
+            db.collection('users').orderBy('balance', 'desc').limit(10).get().then(snap => {
+                let html = '';
+                snap.forEach((doc, index) => {
+                    const data = doc.data();
+                    const rank = index + 1;
+                    let rankClass = "text-white";
+                    let icon = "";
+                    
+                    if(rank === 1) { rankClass = "text-yellow-400"; icon = '<i class="fa-solid fa-crown text-yellow-400"></i>'; }
+                    else if(rank === 2) { rankClass = "text-gray-300"; icon = '<i class="fa-solid fa-medal text-gray-300"></i>'; }
+                    else if(rank === 3) { rankClass = "text-orange-400"; icon = '<i class="fa-solid fa-medal text-orange-400"></i>'; }
+                    else { icon = `<span class="font-bold opacity-50">#${rank}</span>`; }
+
+                    html += `
+                    <div class="glass p-3 rounded-xl flex justify-between items-center">
+                        <div class="flex items-center gap-3">
+                            <div class="w-8 h-8 flex items-center justify-center">${icon}</div>
+                            <div class="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-xs font-bold text-white">${data.name ? data.name.charAt(0) : 'U'}</div>
+                            <span class="${rankClass} font-bold text-sm">${data.name || 'Guest'}</span>
+                        </div>
+                        <span class="font-bold text-green-400">$${(data.balance || 0).toFixed(2)}</span>
+                    </div>`;
+                });
+                document.getElementById('leaderboard-list').innerHTML = html;
+            });
+        }
+
+        function updateBalance(amt) {
+            if(!currentUser) return;
+            let up = { balance: firebase.firestore.FieldValue.increment(amt) };
+            if(amt===0.10) up.adsWatched = firebase.firestore.FieldValue.increment(1);
+            db.collection('users').doc(currentUser.uid).update(up);
+        }
+        function openDirectLink(id) { 
+            window.open(links[id], '_blank'); 
+            setTimeout(()=>{ if(confirm("Done?")) updateBalance(0.05); }, 5000); 
+        }
+        function showMonetagAd() { if(typeof show_9055411 ==='function') show_9055411().then(()=>updateBalance(0.10)); else alert("Ad loading..."); }
+
+        function selectMethod(m,el) {
+            currentMethod=m;
+            document.querySelectorAll('.pay-card').forEach(e=>e.classList.remove('selected'));
+            el.classList.add('selected');
+            const map={'bkash':'Bkash No','nagad':'Nagad No','recharge':'Mobile No','usdt':'TRC20 Address'};
+            document.getElementById('address-label').innerText=map[m];
+        }
+        function setAmount(v) { document.getElementById('withdraw-amount').value=v; }
+        
+        function submitWithdraw() {
+            const amt = parseFloat(document.getElementById('withdraw-amount').value);
+            const addr = document.getElementById('withdraw-address').value;
+            if(!amt || amt<5) return alert("Min $5");
+            if(balance<amt) return alert("Low Balance");
+            if(addr.length<4) return alert("Invalid Address");
+            
+            document.getElementById('withdraw-btn').innerText="Processing...";
+            db.collection('withdrawals').add({
+                uid: currentUser.uid, amount: amt, method: currentMethod, address: addr, status: 'pending', date: firebase.firestore.FieldValue.serverTimestamp()
+            }).then(()=>{
+                updateBalance(-amt);
+                setTimeout(()=>{
+                    document.getElementById('withdraw-btn').innerText="Withdraw";
+                    document.getElementById('modal-amount').innerText='$'+amt.toFixed(2);
+                    document.getElementById('modal-method').innerText=currentMethod;
+                    document.getElementById('success-modal').classList.remove('hidden');
+                },1000);
+            });
+        }
+
+        function copyRef() { const e=document.getElementById('ref-code-display'); e.select(); document.execCommand('copy'); alert("Link Copied"); }
+        function copyUID() { navigator.clipboard.writeText(document.getElementById('settings-uid').innerText); alert("UID Copied"); }
+        function closeSuccessModal() { document.getElementById('success-modal').classList.add('hidden'); }
+        function toggleAI() { document.getElementById('ai-modal').classList.toggle('hidden'); }
+        function sendAIMessage() {
+            const i = document.getElementById('ai-input');
+            document.getElementById('chat-box').innerHTML += `<div class="flex justify-end mb-2"><div class="bg-blue-500 p-3 rounded-xl text-sm">${i.value}</div></div>`;
+            i.value = "";
+        }
+        function nav(id) {
+            document.querySelectorAll('.section').forEach(e=>e.classList.remove('active'));
+            document.getElementById(id).classList.add('active');
+            document.querySelectorAll('.nav-item').forEach(e=>e.classList.remove('active','text-yellow-400'));
+            const map={'dashboard':0,'earn':1,'wallet':2,'leaderboard':3,'settings':4};
+            if(document.querySelectorAll('.nav-item')[map[id]]) document.querySelectorAll('.nav-item')[map[id]].classList.add('active','text-yellow-400');
+            if(id === 'leaderboard') loadLeaderboard();
+        }
+    </script>
+</body>
+</html>
